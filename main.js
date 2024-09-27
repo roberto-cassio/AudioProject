@@ -21,6 +21,22 @@ function drawFrequencyLine(canvasCtx, lineHistory, canvasHeight) {
     }
     canvasCtx.stroke();
 }
+function frequencyToNote(frequencyInHz) {
+    if (frequencyInHz != 0) {
+        const pitchStandardFrequency = 440;
+        const noteNames = [
+            'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'
+        ];
+        const semitoneOffset = Math.round(12 * Math.log2(frequencyInHz / pitchStandardFrequency));
+        const noteIndex = Math.round(semitoneOffset + 9) % 12;
+        const positiveNoteIndex = noteIndex < 0 ? noteIndex + 12 : noteIndex;
+        const octave = 4 + Math.floor((semitoneOffset + 9) / 12);
+        return `${noteNames[positiveNoteIndex]}${octave}`;
+    }
+    else {
+        return "-";
+    }
+}
 audioInitialize().then(({ audioCtx, analyser }) => {
     const bufferLength = analyser.frequencyBinCount;
     const dataArray = new Uint8Array(bufferLength);
@@ -57,6 +73,7 @@ audioInitialize().then(({ audioCtx, analyser }) => {
             canvasCtx.fillStyle = 'rgb(255, 255, 255)';
             canvasCtx.font = '20px Arial';
             canvasCtx.fillText(`Frequência: ${Math.round(frequencyInHz)} Hz`, 10, 30);
+            canvasCtx.fillText(`Nota: ${frequencyToNote(frequencyInHz)}`, 10, 50);
         }
         draw();
     }
