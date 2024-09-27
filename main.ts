@@ -1,12 +1,34 @@
-navigator.mediaDevices.getUserMedia({audio:true})
-.then (function(stream){
-    const audioCtx = new AudioContext();
-    const source = audioCtx.createMediaStreamSource(stream);
-    
-    const analyser = audioCtx.createAnalyser();
-    analyser.fftSize = 2048;
-    source.connect(analyser);
 
+function audioInitialize(){
+    return navigator.mediaDevices.getUserMedia({audio:true})
+        .then (function(stream){
+            const audioCtx = new AudioContext();
+            const source = audioCtx.createMediaStreamSource(stream);
+            
+            const analyser = audioCtx.createAnalyser();
+            analyser.fftSize = 2048;
+            source.connect(analyser);
+            return {audioCtx, analyser};
+});
+}
+
+function drawFrequencyLine(canvasCtx: CanvasRenderingContext2D, lineHistory: number[], canvasHeight: number): void{
+    canvasCtx.beginPath();
+    canvasCtx.lineWidth = 2;
+    canvasCtx.strokeStyle = 'rgb(255, 255, 255)';
+    canvasCtx.moveTo(0, canvasHeight - (lineHistory[0] / 1000 * canvasHeight));
+
+    for (let i = 1; i < lineHistory.length; i++){
+        const y = canvasHeight - (lineHistory[i] / 1000 * canvasHeight);
+        canvasCtx.lineTo(i, y);
+    }
+
+    canvasCtx.stroke();
+
+}
+
+
+audioInitialize().then(( { audioCtx, analyser})=>{
     const bufferLength = analyser.frequencyBinCount;
     const dataArray = new Uint8Array(bufferLength);
 
@@ -15,9 +37,11 @@ navigator.mediaDevices.getUserMedia({audio:true})
     if(canvas == null){
         console.error("Canvas recebeu null")
     }else{
-        const canvasCtx =<CanvasRenderingContext2D> canvas.getContext('2d');
+        const canvasCtx = <CanvasRenderingContext2D> canvas.getContext('2d');
         let lineHistory: number[] = [];
-        function draw (){
+
+
+        function draw(){
             requestAnimationFrame(draw);
     
             analyser.getByteFrequencyData(dataArray);
@@ -44,35 +68,16 @@ navigator.mediaDevices.getUserMedia({audio:true})
             canvasCtx.fillStyle = 'rgb(0, 0, 0)';
             canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
 
-            canvasCtx.beginPath();
-            canvasCtx.lineWidth = 2;
-            canvasCtx.strokeStyle = 'rgb(255, 255, 255)';
-            canvasCtx.moveTo(0, canvas.height - (lineHistory[0] / 1000 * canvas.height));
+            drawFrequencyLine(canvasCtx, lineHistory, canvas.height)
 
-            for (let i = 1; i < lineHistory.length; i++){
-                const y = canvas.height - (lineHistory[i] / 1000 * canvas.height);
-                canvasCtx.lineTo(i,y);
-            }
-
-            canvasCtx.stroke();
-           /* const barWidth = (canvas.width / bufferLength) * 2.5;
-            let barHeight;
-            let x = 0;
-
-            for (let i = 0; i < bufferLength; i++) {
-                barHeight = dataArray[i];
-        
-                canvasCtx.fillStyle = 'rgb(' + (barHeight + 100) + ',50,50)';
-                canvasCtx.fillRect(x, canvas.height - barHeight / 2, barWidth, barHeight / 2);
-                x += barWidth +1;
-                */
-                canvasCtx.fillStyle = 'rgb(255, 255, 255)';
-                canvasCtx.font = '20px Arial';
-                canvasCtx.fillText(`Frequência: ${Math.round(frequencyInHz)} Hz`, 10, 30); 
+            canvasCtx.fillStyle = 'rgb(255, 255, 255)';
+            canvasCtx.font = '20px Arial';
+            canvasCtx.fillText(`Frequência: ${Math.round(frequencyInHz)} Hz`, 10, 30); 
     }  
     draw();
 }
-})
+}) 
+
 .catch(function(err){
     console.error("Falha ao Acessar o Microfone")
 })
