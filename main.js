@@ -10,6 +10,15 @@ function audioInitialize() {
         return { audioCtx, analyser };
     });
 }
+function frequencyToPosition(frequency, canvasHeight, minFrequency, maxFrequency) {
+    if (frequency <= 0)
+        return canvasHeight;
+    const logMinFreq = Math.log10(minFrequency);
+    const logMaxFreq = Math.log10(maxFrequency);
+    const logFreq = Math.log10(frequency);
+    const positionRatio = (logFreq - logMinFreq) / (logMaxFreq - logMinFreq);
+    return canvasHeight * (1 - positionRatio);
+}
 function drawFrequencyLine(canvasCtx, lineHistory, canvasHeight) {
     canvasCtx.beginPath();
     canvasCtx.lineWidth = 2;
@@ -21,8 +30,8 @@ function drawFrequencyLine(canvasCtx, lineHistory, canvasHeight) {
     }
     canvasCtx.stroke();
 }
-function drawFrequencyPoint(canvasCtx, point, canvasHeight) {
-    const y = canvasHeight - (point / 1000 * canvasHeight);
+function drawFrequencyPoint(canvasCtx, frequencyInHz, canvasHeight, minFrequency, maxFrequency) {
+    const y = frequencyToPosition(frequencyInHz, canvasHeight, minFrequency, maxFrequency);
     canvasCtx.fillStyle = 'rgb(255, 0, 255)';
     canvasCtx.beginPath();
     canvasCtx.arc((canvasCtx.canvas.height / 2), y, 5, 0, Math.PI * 2);
@@ -78,6 +87,8 @@ audioInitialize().then(({ audioCtx, analyser }) => {
             canvasCtx.fillStyle = 'rgb(0, 0, 0)';
             canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
             const noteRange = ['C3', 'D3', 'E3', 'F3', 'G3', 'A3', 'B3', 'C4', 'D4', 'E4', 'F4', 'G4', 'A4', 'B4', 'C5'];
+            const minFrequency = 130.81; //C3 Frequency
+            const maxFrequency = 523.25; //C5 Frequency
             const noteHeight = canvas.height / noteRange.length;
             noteRange.forEach((note, index) => {
                 const y = canvas.height - index * noteHeight;
@@ -91,11 +102,11 @@ audioInitialize().then(({ audioCtx, analyser }) => {
                 canvasCtx.fillText(note, 10, y - 5);
             });
             drawFrequencyLine(canvasCtx, lineHistory, canvas.height);
-            drawFrequencyPoint(canvasCtx, frequencyInHz, canvas.height);
+            drawFrequencyPoint(canvasCtx, frequencyInHz, canvas.height, minFrequency, maxFrequency);
             canvasCtx.fillStyle = 'rgb(255, 255, 255)';
-            canvasCtx.font = '20px Arial';
-            canvasCtx.fillText(`Frequência: ${Math.round(frequencyInHz)} Hz`, 10, 30);
-            canvasCtx.fillText(`Nota: ${frequencyToNote(frequencyInHz)}`, 10, 50);
+            canvasCtx.font = '14px Arial';
+            canvasCtx.fillText(`Frequência: ${Math.round(frequencyInHz)} Hz`, 30, 30);
+            canvasCtx.fillText(`Nota: ${frequencyToNote(frequencyInHz)}`, 30, 50);
         }
         draw();
     }
