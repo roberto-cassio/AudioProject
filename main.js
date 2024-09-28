@@ -38,7 +38,8 @@ function loadAndProcessMP3(file) {
             if ((_a = event.target) === null || _a === void 0 ? void 0 : _a.result) {
                 const arrayBuffer = event.target.result;
                 const audioBuffer = yield audioMp3Context.decodeAudioData(arrayBuffer);
-                processMP3AudioBuffer(audioBuffer, audioMp3Context);
+                const { audioBuffer: AudioBuffer, audioContext, analyser } = processMP3AudioBuffer(audioBuffer, audioMp3Context);
+                updateCanvasWithMp3(AudioBuffer, audioContext, analyser);
             }
             else {
                 console.error("Houve um erro ao carregar o arquivo");
@@ -46,6 +47,25 @@ function loadAndProcessMP3(file) {
         });
     };
     mp3Reader.readAsArrayBuffer(file);
+}
+function updateCanvasWithMp3(audioBuffer, audioContext, analyser) {
+    const bufferLength = analyser.frequencyBinCount;
+    const dataArray = new Uint8Array(bufferLength);
+    function update() {
+        analyser.getByteFrequencyData(dataArray);
+        const sampleRate = audioContext.sampleRate;
+        let maxIndexByteFrequency = 0;
+        for (let i = 1; i < bufferLength; i++) {
+            if (dataArray[i] > dataArray[maxIndexByteFrequency]) {
+                maxIndexByteFrequency = i;
+            }
+        }
+        const frequencyInHz = maxIndexByteFrequency * (sampleRate / 2) / bufferLength;
+        console.log("MP3 Frequência em Hz:", frequencyInHz);
+        drawCanvas(frequencyInHz, null);
+        requestAnimationFrame(update);
+    }
+    update();
 }
 function processMP3AudioBuffer(audioBuffer, audioContext) {
     console.log("Processando Buffer do MP3 Audio");
@@ -56,6 +76,7 @@ function processMP3AudioBuffer(audioBuffer, audioContext) {
     source.connect(analyser);
     analyser.connect(audioContext.destination);
     source.start();
+    return { audioBuffer, audioContext, analyser };
 }
 //Loading Mic Audio
 function audioInitialize() {
@@ -97,12 +118,17 @@ function noteToFrequency(note, noteRange, minFrequency, maxFrequency) {
     const frequency = minFrequency * Math.pow(maxFrequency / minFrequency, noteIndex / (noteRange.length - 1));
     return frequency;
 }
-function drawFrequencyPoint(canvasCtx, frequencyInHz, canvasHeight, minFrequency, maxFrequency) {
-    const y = frequencyToPosition(frequencyInHz, canvasHeight, minFrequency, maxFrequency);
-    canvasCtx.fillStyle = 'rgb(255, 0, 255)';
-    canvasCtx.beginPath();
-    canvasCtx.arc((canvasCtx.canvas.height / 2), y, 5, 0, Math.PI * 2);
-    canvasCtx.fill();
+function drawFrequencyPoint(canvasCtx, frequencyInHz, canvasHeight, minFrequency, maxFrequency, color) {
+    if (!frequencyInHz) {
+        const y = 0;
+    }
+    else {
+        const y = frequencyToPosition(frequencyInHz, canvasHeight, minFrequency, maxFrequency);
+        canvasCtx.fillStyle = color;
+        canvasCtx.beginPath();
+        canvasCtx.arc((canvasCtx.canvas.height / 2), y, 5, 0, Math.PI * 2);
+        canvasCtx.fill();
+    }
 }
 function frequencyToNote(frequencyInHz) {
     if (frequencyInHz != 0) {
@@ -138,6 +164,30 @@ function drawBackground(canvasCtx, canvas, maxFrequency, minFrequency) {
         canvasCtx.fillText(note, 10, y - 5);
     });
 }
+function drawCanvas(mp3Frequency, micFrequency) {
+    const canvas = document.getElementById('audioCanvas');
+    const canvasCtx = canvas.getContext('2d');
+    const minFrequency = 130.81; //C3 Frequency
+    const maxFrequency = 523.25; //C5 Frequency
+    canvasCtx.fillStyle = 'rgb(0, 0, 0)';
+    canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
+    const mp3PointerColor = "rgb(0,128,0)";
+    const pointerColor = "rgb(255, 255, 255)";
+    drawBackground(canvasCtx, canvas, maxFrequency, minFrequency);
+    // drawFrequencyLine(canvasCtx, lineHistory, canvas.height)
+    drawFrequencyPoint(canvasCtx, micFrequency, canvas.height, minFrequency, maxFrequency, mp3PointerColor);
+    drawFrequencyPoint(canvasCtx, mp3Frequency, canvas.height, minFrequency, maxFrequency, pointerColor);
+    canvasCtx.fillStyle = 'rgb(255, 255, 255)';
+    canvasCtx.font = '14px Arial';
+    if (micFrequency) {
+        canvasCtx.fillText(`Frequência: ${Math.round(micFrequency)} Hz`, 30, 30);
+        canvasCtx.fillText(`Nota: ${frequencyToNote(micFrequency)}`, 30, 50);
+    }
+    else {
+        canvasCtx.fillText(`Frequência: - Hz`, 30, 30);
+        canvasCtx.fillText(`Nota: -`, 30, 50);
+    }
+}
 audioInitialize().then(({ audioCtx, analyser }) => {
     const bufferLength = analyser.frequencyBinCount;
     const dataArray = new Uint8Array(bufferLength);
@@ -147,7 +197,6 @@ audioInitialize().then(({ audioCtx, analyser }) => {
         console.error("Canvas recebeu null");
     }
     else {
-        const canvasCtx = canvas.getContext('2d');
         let lineHistory = [];
         function draw() {
             requestAnimationFrame(draw);
@@ -168,17 +217,8 @@ audioInitialize().then(({ audioCtx, analyser }) => {
             if (lineHistory.length > canvas.width) {
                 lineHistory.shift();
             }
-            canvasCtx.fillStyle = 'rgb(0, 0, 0)';
-            canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
-            const minFrequency = 130.81; //C3 Frequency
-            const maxFrequency = 523.25; //C5 Frequency
-            drawBackground(canvasCtx, canvas, maxFrequency, minFrequency);
-            // drawFrequencyLine(canvasCtx, lineHistory, canvas.height)
-            drawFrequencyPoint(canvasCtx, frequencyInHz, canvas.height, minFrequency, maxFrequency);
-            canvasCtx.fillStyle = 'rgb(255, 255, 255)';
-            canvasCtx.font = '14px Arial';
-            canvasCtx.fillText(`Frequência: ${Math.round(frequencyInHz)} Hz`, 30, 30);
-            canvasCtx.fillText(`Nota: ${frequencyToNote(frequencyInHz)}`, 30, 50);
+            const pointerColor = 'rgb(255, 0, 255)';
+            drawCanvas(null, frequencyInHz);
         }
         draw();
     }

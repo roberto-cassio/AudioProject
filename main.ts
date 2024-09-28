@@ -29,13 +29,43 @@ function loadAndProcessMP3(file: File){
         if (event.target?.result){
             const arrayBuffer = event.target.result as ArrayBuffer;
             const audioBuffer = await audioMp3Context.decodeAudioData(arrayBuffer);
-            processMP3AudioBuffer(audioBuffer,audioMp3Context);
+            const {audioBuffer: AudioBuffer, audioContext, analyser } = processMP3AudioBuffer(audioBuffer,audioMp3Context);
+
+            updateCanvasWithMp3(AudioBuffer, audioContext, analyser)
         }
         else{
             console.error("Houve um erro ao carregar o arquivo")
         }
     };
     mp3Reader.readAsArrayBuffer(file);
+}
+
+function updateCanvasWithMp3(audioBuffer: AudioBuffer,audioContext: AudioContext, analyser:AnalyserNode){
+    const bufferLength = analyser.frequencyBinCount;
+    const dataArray = new Uint8Array(bufferLength);
+
+    function update(){
+        analyser.getByteFrequencyData(dataArray);
+        const sampleRate = audioContext.sampleRate;
+
+        let maxIndexByteFrequency = 0;
+
+        for (let i = 1; i<bufferLength; i++){
+            if (dataArray[i] > dataArray[maxIndexByteFrequency]){
+                maxIndexByteFrequency = i;
+            }
+        }
+
+        const frequencyInHz = maxIndexByteFrequency * (sampleRate/2)/bufferLength;
+        console.log("MP3 Frequência em Hz:", frequencyInHz);
+
+        drawCanvas(frequencyInHz,null)
+
+        requestAnimationFrame(update);
+    }
+    update();
+
+
 }
 
 function processMP3AudioBuffer(audioBuffer: AudioBuffer, audioContext: AudioContext){
@@ -50,6 +80,7 @@ function processMP3AudioBuffer(audioBuffer: AudioBuffer, audioContext: AudioCont
     analyser.connect(audioContext.destination);
 
     source.start();
+    return { audioBuffer, audioContext, analyser }
 }
 
 //Loading Mic Audio
@@ -105,15 +136,17 @@ function noteToFrequency(note: string, noteRange: string[] , minFrequency: numbe
 
 }
 
-function drawFrequencyPoint(canvasCtx: CanvasRenderingContext2D, frequencyInHz:number, canvasHeight:number, minFrequency:number, maxFrequency:number): void{
-
-    const y = frequencyToPosition(frequencyInHz, canvasHeight, minFrequency, maxFrequency)
-
-    canvasCtx.fillStyle = 'rgb(255, 0, 255)';
-
-    canvasCtx.beginPath();
-    canvasCtx.arc((canvasCtx.canvas.height/2), y, 5, 0, Math.PI * 2);
-    canvasCtx.fill();
+function drawFrequencyPoint(canvasCtx: CanvasRenderingContext2D, frequencyInHz:number | null, canvasHeight:number, minFrequency:number, maxFrequency:number, color: string): void{
+    if(!frequencyInHz){
+        const y = 0;
+    }else{
+        const y = frequencyToPosition(frequencyInHz, canvasHeight, minFrequency, maxFrequency)
+        canvasCtx.fillStyle = color;
+    
+        canvasCtx.beginPath();
+        canvasCtx.arc((canvasCtx.canvas.height/2), y, 5, 0, Math.PI * 2);
+        canvasCtx.fill();
+    }
 }
 
 function frequencyToNote(frequencyInHz:number){
@@ -166,6 +199,42 @@ function drawBackground(canvasCtx:CanvasRenderingContext2D,canvas:HTMLCanvasElem
     });
 
 }
+
+function drawCanvas( mp3Frequency:number | null, micFrequency:number | null){
+    
+    const canvas = <HTMLCanvasElement> document.getElementById('audioCanvas');
+    const canvasCtx = <CanvasRenderingContext2D> canvas.getContext('2d');
+
+
+
+    const minFrequency = 130.81; //C3 Frequency
+    const maxFrequency = 523.25; //C5 Frequency
+    
+    canvasCtx.fillStyle = 'rgb(0, 0, 0)';
+    canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
+
+
+    const mp3PointerColor = "rgb(0,128,0)";
+    const pointerColor = "rgb(255, 255, 255)"
+    
+    drawBackground(canvasCtx,canvas,maxFrequency,minFrequency)
+   // drawFrequencyLine(canvasCtx, lineHistory, canvas.height)
+    drawFrequencyPoint(canvasCtx, micFrequency, canvas.height, minFrequency, maxFrequency, mp3PointerColor);
+    drawFrequencyPoint(canvasCtx, mp3Frequency, canvas.height, minFrequency, maxFrequency, pointerColor)
+
+
+    canvasCtx.fillStyle = 'rgb(255, 255, 255)';
+    canvasCtx.font = '14px Arial';
+    if (micFrequency){
+        canvasCtx.fillText(`Frequência: ${Math.round(micFrequency)} Hz`, 30, 30); 
+        canvasCtx.fillText(`Nota: ${frequencyToNote(micFrequency)}`, 30, 50)
+    }
+    else{
+        canvasCtx.fillText(`Frequência: - Hz`, 30, 30); 
+        canvasCtx.fillText(`Nota: -`, 30, 50)
+    }
+
+}
 audioInitialize().then(( { audioCtx, analyser})=>{
     const bufferLength = analyser.frequencyBinCount;
     const dataArray = new Uint8Array(bufferLength);
@@ -175,7 +244,6 @@ audioInitialize().then(( { audioCtx, analyser})=>{
     if(canvas == null){
         console.error("Canvas recebeu null")
     }else{
-        const canvasCtx = <CanvasRenderingContext2D> canvas.getContext('2d');
         let lineHistory: number[] = [];
 
 
@@ -186,6 +254,7 @@ audioInitialize().then(( { audioCtx, analyser})=>{
             const sampleRate = audioCtx.sampleRate;
     
             let maxIndexByteFrequency = 0;
+
             for (let i = 1; i<bufferLength; i++){
                 if (dataArray[i] > dataArray[maxIndexByteFrequency]){
                     maxIndexByteFrequency = i;
@@ -202,23 +271,11 @@ audioInitialize().then(( { audioCtx, analyser})=>{
             if (lineHistory.length > canvas.width){
                 lineHistory.shift();
             }
-            
-            canvasCtx.fillStyle = 'rgb(0, 0, 0)';
-            canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
 
-            const minFrequency = 130.81; //C3 Frequency
-            const maxFrequency = 523.25; //C5 Frequency
+            const pointerColor =  'rgb(255, 0, 255)'
+            drawCanvas(null, frequencyInHz);
+                
 
-            
-            drawBackground(canvasCtx,canvas,maxFrequency,minFrequency)
-           // drawFrequencyLine(canvasCtx, lineHistory, canvas.height)
-            drawFrequencyPoint(canvasCtx, frequencyInHz, canvas.height, minFrequency, maxFrequency)
-
-
-            canvasCtx.fillStyle = 'rgb(255, 255, 255)';
-            canvasCtx.font = '14px Arial';
-            canvasCtx.fillText(`Frequência: ${Math.round(frequencyInHz)} Hz`, 30, 30); 
-            canvasCtx.fillText(`Nota: ${frequencyToNote(frequencyInHz)}`, 30, 50)
     }  
     draw();
 }
