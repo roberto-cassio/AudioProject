@@ -1,3 +1,54 @@
+document.getElementById('playAudio')?.addEventListener('click', function() {
+    document.getElementById('mp3Input')?.click();
+});
+
+document.getElementById('mp3Input')?.addEventListener('change', function(event) {
+    const input = event.target as HTMLInputElement;
+    console.log("Arquivo Selecionado")
+    if(input?.files && input.files[0]){
+        console.log("Processando MP3")
+        const file = input.files[0];
+        loadAndProcessMP3(file);
+    }else{
+        console.error("Nenhum arquivo selecionado.")
+    }
+})
+
+
+function loadAndProcessMP3(file: File){
+    const audioMp3Context = new AudioContext();
+    
+    if (audioMp3Context.state === 'suspended') {
+        audioMp3Context.resume();
+    }
+    const mp3Reader = new FileReader();
+
+    mp3Reader.onload = async function(event){
+        if (event.target?.result){
+            const arrayBuffer = event.target.result as ArrayBuffer;
+            const audioBuffer = await audioMp3Context.decodeAudioData(arrayBuffer);
+            processMP3AudioBuffer(audioBuffer,audioMp3Context);
+        }
+        else{
+            console.error("Houve um erro ao carregar o arquivo")
+        }
+    };
+    mp3Reader.readAsArrayBuffer(file);
+}
+
+function processMP3AudioBuffer(audioBuffer: AudioBuffer, audioContext: AudioContext){
+    console.log("Processando Buffer do MP3 Audio")
+    const source = audioContext.createBufferSource();
+    source.buffer = audioBuffer;
+
+    const analyser = audioContext.createAnalyser();
+    analyser.fftSize = 2048; 
+
+    source.connect(analyser);
+    analyser.connect(audioContext.destination);
+
+    source.start();
+}
 
 function audioInitialize(){
     return navigator.mediaDevices.getUserMedia({audio:true})
@@ -37,6 +88,15 @@ function drawFrequencyLine(canvasCtx: CanvasRenderingContext2D, lineHistory: num
     }
 
     canvasCtx.stroke();
+
+}
+
+function noteToFrequency(note: string, noteRange: string[] , minFrequency: number, maxFrequency:number): number{
+    const noteIndex = noteRange.indexOf(note);
+    if (noteIndex === -1) throw new Error ("Nota Inválida")
+    const frequency = minFrequency * Math.pow(maxFrequency / minFrequency, noteIndex / (noteRange.length - 1));
+
+    return frequency;
 
 }
 
@@ -124,9 +184,9 @@ audioInitialize().then(( { audioCtx, analyser})=>{
             const noteHeight = canvas.height/noteRange.length;
 
             noteRange.forEach((note, index) => {
-                const y = canvas.height - index * noteHeight;
                 
-                
+            const frequency = noteToFrequency(note,noteRange,minFrequency,maxFrequency);
+             const y = canvas.height - ((frequency - minFrequency) / (maxFrequency - minFrequency)) * canvas.height;
                 
                 canvasCtx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
                 canvasCtx.beginPath();
@@ -140,7 +200,7 @@ audioInitialize().then(( { audioCtx, analyser})=>{
             });
         
 
-            drawFrequencyLine(canvasCtx, lineHistory, canvas.height)
+           // drawFrequencyLine(canvasCtx, lineHistory, canvas.height)
             drawFrequencyPoint(canvasCtx, frequencyInHz, canvas.height, minFrequency, maxFrequency)
 
 

@@ -1,4 +1,61 @@
 "use strict";
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
+var _a, _b;
+(_a = document.getElementById('playAudio')) === null || _a === void 0 ? void 0 : _a.addEventListener('click', function () {
+    var _a;
+    (_a = document.getElementById('mp3Input')) === null || _a === void 0 ? void 0 : _a.click();
+});
+(_b = document.getElementById('mp3Input')) === null || _b === void 0 ? void 0 : _b.addEventListener('change', function (event) {
+    const input = event.target;
+    console.log("Arquivo Selecionado");
+    if ((input === null || input === void 0 ? void 0 : input.files) && input.files[0]) {
+        console.log("Processando MP3");
+        const file = input.files[0];
+        loadAndProcessMP3(file);
+    }
+    else {
+        console.error("Nenhum arquivo selecionado.");
+    }
+});
+function loadAndProcessMP3(file) {
+    const audioMp3Context = new AudioContext();
+    if (audioMp3Context.state === 'suspended') {
+        audioMp3Context.resume();
+    }
+    const mp3Reader = new FileReader();
+    mp3Reader.onload = function (event) {
+        return __awaiter(this, void 0, void 0, function* () {
+            var _a;
+            if ((_a = event.target) === null || _a === void 0 ? void 0 : _a.result) {
+                const arrayBuffer = event.target.result;
+                const audioBuffer = yield audioMp3Context.decodeAudioData(arrayBuffer);
+                processMP3AudioBuffer(audioBuffer, audioMp3Context);
+            }
+            else {
+                console.error("Houve um erro ao carregar o arquivo");
+            }
+        });
+    };
+    mp3Reader.readAsArrayBuffer(file);
+}
+function processMP3AudioBuffer(audioBuffer, audioContext) {
+    console.log("Processando Buffer do MP3 Audio");
+    const source = audioContext.createBufferSource();
+    source.buffer = audioBuffer;
+    const analyser = audioContext.createAnalyser();
+    analyser.fftSize = 2048;
+    source.connect(analyser);
+    analyser.connect(audioContext.destination);
+    source.start();
+}
 function audioInitialize() {
     return navigator.mediaDevices.getUserMedia({ audio: true })
         .then(function (stream) {
@@ -29,6 +86,13 @@ function drawFrequencyLine(canvasCtx, lineHistory, canvasHeight) {
         canvasCtx.lineTo(i, y);
     }
     canvasCtx.stroke();
+}
+function noteToFrequency(note, noteRange, minFrequency, maxFrequency) {
+    const noteIndex = noteRange.indexOf(note);
+    if (noteIndex === -1)
+        throw new Error("Nota Inválida");
+    const frequency = minFrequency * Math.pow(maxFrequency / minFrequency, noteIndex / (noteRange.length - 1));
+    return frequency;
 }
 function drawFrequencyPoint(canvasCtx, frequencyInHz, canvasHeight, minFrequency, maxFrequency) {
     const y = frequencyToPosition(frequencyInHz, canvasHeight, minFrequency, maxFrequency);
@@ -91,7 +155,8 @@ audioInitialize().then(({ audioCtx, analyser }) => {
             const maxFrequency = 523.25; //C5 Frequency
             const noteHeight = canvas.height / noteRange.length;
             noteRange.forEach((note, index) => {
-                const y = canvas.height - index * noteHeight;
+                const frequency = noteToFrequency(note, noteRange, minFrequency, maxFrequency);
+                const y = canvas.height - ((frequency - minFrequency) / (maxFrequency - minFrequency)) * canvas.height;
                 canvasCtx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
                 canvasCtx.beginPath();
                 canvasCtx.moveTo(0, y);
@@ -101,7 +166,7 @@ audioInitialize().then(({ audioCtx, analyser }) => {
                 canvasCtx.font = '12px Arial';
                 canvasCtx.fillText(note, 10, y - 5);
             });
-            drawFrequencyLine(canvasCtx, lineHistory, canvas.height);
+            // drawFrequencyLine(canvasCtx, lineHistory, canvas.height)
             drawFrequencyPoint(canvasCtx, frequencyInHz, canvas.height, minFrequency, maxFrequency);
             canvasCtx.fillStyle = 'rgb(255, 255, 255)';
             canvasCtx.font = '14px Arial';
