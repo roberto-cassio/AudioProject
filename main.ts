@@ -1,3 +1,5 @@
+//LoadingMP3
+
 document.getElementById('playAudio')?.addEventListener('click', function() {
     document.getElementById('mp3Input')?.click();
 });
@@ -50,6 +52,7 @@ function processMP3AudioBuffer(audioBuffer: AudioBuffer, audioContext: AudioCont
     source.start();
 }
 
+//Loading Mic Audio
 function audioInitialize(){
     return navigator.mediaDevices.getUserMedia({audio:true})
         .then (function(stream){
@@ -63,6 +66,8 @@ function audioInitialize(){
 });
 }
 
+
+//AudioProcessing
 function frequencyToPosition(frequency:number, canvasHeight: number, minFrequency:number, maxFrequency:number):number{
     if (frequency<=0) return canvasHeight;
 
@@ -135,7 +140,32 @@ function frequencyToNote(frequencyInHz:number){
         
       }
       
+//DrawingFunctions
 
+function drawBackground(canvasCtx:CanvasRenderingContext2D,canvas:HTMLCanvasElement, maxFrequency:number, minFrequency:number){
+    const noteRange = ['C3', 'D3', 'E3', 'F3', 'G3', 'A3', 'B3', 'C4', 'D4', 'E4', 'F4', 'G4', 'A4', 'B4', 'C5']
+
+
+
+    const noteHeight = canvas.height/noteRange.length;
+
+    noteRange.forEach((note, index) => {
+        
+    const frequency = noteToFrequency(note,noteRange,minFrequency,maxFrequency);
+     const y = canvas.height - ((frequency - minFrequency) / (maxFrequency - minFrequency)) * canvas.height;
+        
+        canvasCtx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+        canvasCtx.beginPath();
+        canvasCtx.moveTo(0, y);
+        canvasCtx.lineTo(canvas.width, y);
+        canvasCtx.stroke();
+        
+        canvasCtx.fillStyle = 'rgb(255, 255, 255)';
+        canvasCtx.font = '12px Arial';
+        canvasCtx.fillText(note, 10, y - 5);
+    });
+
+}
 audioInitialize().then(( { audioCtx, analyser})=>{
     const bufferLength = analyser.frequencyBinCount;
     const dataArray = new Uint8Array(bufferLength);
@@ -176,30 +206,11 @@ audioInitialize().then(( { audioCtx, analyser})=>{
             canvasCtx.fillStyle = 'rgb(0, 0, 0)';
             canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
 
-            const noteRange = ['C3', 'D3', 'E3', 'F3', 'G3', 'A3', 'B3', 'C4', 'D4', 'E4', 'F4', 'G4', 'A4', 'B4', 'C5']
-
             const minFrequency = 130.81; //C3 Frequency
             const maxFrequency = 523.25; //C5 Frequency
 
-            const noteHeight = canvas.height/noteRange.length;
-
-            noteRange.forEach((note, index) => {
-                
-            const frequency = noteToFrequency(note,noteRange,minFrequency,maxFrequency);
-             const y = canvas.height - ((frequency - minFrequency) / (maxFrequency - minFrequency)) * canvas.height;
-                
-                canvasCtx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
-                canvasCtx.beginPath();
-                canvasCtx.moveTo(0, y);
-                canvasCtx.lineTo(canvas.width, y);
-                canvasCtx.stroke();
-                
-                canvasCtx.fillStyle = 'rgb(255, 255, 255)';
-                canvasCtx.font = '12px Arial';
-                canvasCtx.fillText(note, 10, y - 5);
-            });
-        
-
+            
+            drawBackground(canvasCtx,canvas,maxFrequency,minFrequency)
            // drawFrequencyLine(canvasCtx, lineHistory, canvas.height)
             drawFrequencyPoint(canvasCtx, frequencyInHz, canvas.height, minFrequency, maxFrequency)
 
@@ -212,7 +223,6 @@ audioInitialize().then(( { audioCtx, analyser})=>{
     draw();
 }
 }) 
-
 .catch(function(err){
     console.error("Falha ao Acessar o Microfone")
 })
