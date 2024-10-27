@@ -10,12 +10,14 @@ document.getElementById('mp3Input')?.addEventListener('change', function(event) 
     if(input?.files && input.files[0]){
         console.log("Processando MP3")
         const file = input.files[0];
-        loadAndProcessMP3(file);
+        loadAndProcessMP3(file)
     }else{
         console.error("Nenhum arquivo selecionado.")
     }
 })
 
+let mp3Frequency: number | null = null;
+let micFrequency: number | null = null;
 
 function loadAndProcessMP3(file: File){
     const audioMp3Context = new AudioContext();
@@ -29,9 +31,10 @@ function loadAndProcessMP3(file: File){
         if (event.target?.result){
             const arrayBuffer = event.target.result as ArrayBuffer;
             const audioBuffer = await audioMp3Context.decodeAudioData(arrayBuffer);
-            const {audioBuffer: AudioBuffer, audioContext, analyser } = processMP3AudioBuffer(audioBuffer,audioMp3Context);
+            const {analyser } = processMP3AudioBuffer(audioBuffer,audioMp3Context);
 
-            updateCanvasWithMp3(AudioBuffer, audioContext, analyser)
+            updateCanvasWithMp3(analyser)
+
         }
         else{
             console.error("Houve um erro ao carregar o arquivo")
@@ -40,14 +43,13 @@ function loadAndProcessMP3(file: File){
     mp3Reader.readAsArrayBuffer(file);
 }
 
-function updateCanvasWithMp3(audioBuffer: AudioBuffer,audioContext: AudioContext, analyser:AnalyserNode){
+function updateCanvasWithMp3(analyser:AnalyserNode){
     const bufferLength = analyser.frequencyBinCount;
     const dataArray = new Uint8Array(bufferLength);
 
     function update(){
         analyser.getByteFrequencyData(dataArray);
-        const sampleRate = audioContext.sampleRate;
-
+        const sampleRate = analyser.context.sampleRate;
         let maxIndexByteFrequency = 0;
 
         for (let i = 1; i<bufferLength; i++){
@@ -56,12 +58,10 @@ function updateCanvasWithMp3(audioBuffer: AudioBuffer,audioContext: AudioContext
             }
         }
 
-        const frequencyInHz = maxIndexByteFrequency * (sampleRate/2)/bufferLength;
-        console.log("MP3 Frequência em Hz:", frequencyInHz);
-
-        drawCanvas(frequencyInHz,null)
-
+        mp3Frequency = maxIndexByteFrequency * (sampleRate/2)/bufferLength;
+        console.log("MP3 Frequência em Hz no UpdateCanvas:", mp3Frequency);
         requestAnimationFrame(update);
+
     }
     update();
 
@@ -80,7 +80,7 @@ function processMP3AudioBuffer(audioBuffer: AudioBuffer, audioContext: AudioCont
     analyser.connect(audioContext.destination);
 
     source.start();
-    return { audioBuffer, audioContext, analyser }
+    return { analyser }
 }
 
 //Loading Mic Audio
@@ -200,86 +200,78 @@ function drawBackground(canvasCtx:CanvasRenderingContext2D,canvas:HTMLCanvasElem
 
 }
 
-function drawCanvas( mp3Frequency:number | null, micFrequency:number | null){
-    
-    const canvas = <HTMLCanvasElement> document.getElementById('audioCanvas');
-    const canvasCtx = <CanvasRenderingContext2D> canvas.getContext('2d');
+function startDrawingLoop() {
+    const canvas = <HTMLCanvasElement>document.getElementById('audioCanvas');
+    const canvasCtx = <CanvasRenderingContext2D>canvas.getContext('2d');
 
-
-
-    const minFrequency = 130.81; //C3 Frequency
-    const maxFrequency = 523.25; //C5 Frequency
-    
-    canvasCtx.fillStyle = 'rgb(0, 0, 0)';
-    canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
-
-
-    const mp3PointerColor = "rgb(0,128,0)";
-    const pointerColor = "rgb(255, 255, 255)"
-    
-    drawBackground(canvasCtx,canvas,maxFrequency,minFrequency)
-   // drawFrequencyLine(canvasCtx, lineHistory, canvas.height)
-    drawFrequencyPoint(canvasCtx, micFrequency, canvas.height, minFrequency, maxFrequency, mp3PointerColor);
-    drawFrequencyPoint(canvasCtx, mp3Frequency, canvas.height, minFrequency, maxFrequency, pointerColor)
-
-
-    canvasCtx.fillStyle = 'rgb(255, 255, 255)';
-    canvasCtx.font = '14px Arial';
-    if (micFrequency){
-        canvasCtx.fillText(`Frequência: ${Math.round(micFrequency)} Hz`, 30, 30); 
-        canvasCtx.fillText(`Nota: ${frequencyToNote(micFrequency)}`, 30, 50)
-    }
-    else{
-        canvasCtx.fillText(`Frequência: - Hz`, 30, 30); 
-        canvasCtx.fillText(`Nota: -`, 30, 50)
+    if (!canvasCtx) {
+        console.error("Erro: Contexto do canvas não encontrado.");
+        return;
     }
 
+    const minFrequency = 130.81; // C3 Frequency
+    const maxFrequency = 523.25; // C5 Frequency
+
+    function drawLoop() {
+        canvasCtx.fillStyle = 'rgb(0, 0, 0)';
+        canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
+
+        drawBackground(canvasCtx, canvas, maxFrequency, minFrequency);
+        
+        const mp3PointerColor = "rgb(0, 128, 0)";
+        const micPointerColor = "rgb(255, 255, 255)";
+
+        drawFrequencyPoint(canvasCtx, mp3Frequency, canvas.height, minFrequency, maxFrequency, mp3PointerColor);
+        drawFrequencyPoint(canvasCtx, micFrequency, canvas.height, minFrequency, maxFrequency, micPointerColor);
+
+        canvasCtx.fillStyle = 'rgb(255, 255, 255)';
+        canvasCtx.font = '14px Arial';
+        if (micFrequency) {
+            canvasCtx.fillText(`Frequência Mic: ${Math.round(micFrequency)} Hz`, 30, 30);
+            canvasCtx.fillText(`Nota Mic: ${frequencyToNote(micFrequency)}`, 30, 50);
+        } else {
+            canvasCtx.fillText(`Frequência Mic: - Hz`, 30, 30);
+            canvasCtx.fillText(`Nota Mic: -`, 30, 50);
+        }
+        console.log("MP3 Frequência em DrawLoop:", mp3Frequency);
+        if (mp3Frequency) {
+            canvasCtx.fillText(`Frequência MP3: ${Math.round(mp3Frequency)} Hz`, 30, 70);
+            canvasCtx.fillText(`Nota MP3: ${frequencyToNote(mp3Frequency)}`, 30, 90);
+        } else {
+            canvasCtx.fillText(`Frequência MP3: - Hz`, 30, 70);
+            canvasCtx.fillText(`Nota MP3: -`, 30, 90);
+        }
+
+        // Repetir o loop de desenho
+        requestAnimationFrame(drawLoop);
+    }
+
+    // Iniciar o loop de desenho
+    drawLoop();
 }
-audioInitialize().then(( { audioCtx, analyser})=>{
+
+// Iniciar o loop de desenho ao carregar o áudio ou iniciar a captação do microfone
+audioInitialize().then(({ audioCtx, analyser }) => {
     const bufferLength = analyser.frequencyBinCount;
     const dataArray = new Uint8Array(bufferLength);
 
-    let lastValidFrequency = 0;
-    const canvas =<HTMLCanvasElement> document.getElementById('audioCanvas');
-    if(canvas == null){
-        console.error("Canvas recebeu null")
-    }else{
-        let lineHistory: number[] = [];
+    function analyzeMicrophone() {
+        analyser.getByteFrequencyData(dataArray);
+        const sampleRate = audioCtx.sampleRate;
 
-
-        function draw(){
-            requestAnimationFrame(draw);
-    
-            analyser.getByteFrequencyData(dataArray);
-            const sampleRate = audioCtx.sampleRate;
-    
-            let maxIndexByteFrequency = 0;
-
-            for (let i = 1; i<bufferLength; i++){
-                if (dataArray[i] > dataArray[maxIndexByteFrequency]){
-                    maxIndexByteFrequency = i;
-                }
+        let maxIndexByteFrequency = 0;
+        for (let i = 1; i < bufferLength; i++) {
+            if (dataArray[i] > dataArray[maxIndexByteFrequency]) {
+                maxIndexByteFrequency = i;
             }
-    
-            const frequencyInHz = maxIndexByteFrequency * (sampleRate/2)/bufferLength; 
+        }
 
-            const validThreshold = 500;
-            if (Math.abs(frequencyInHz - lastValidFrequency) < validThreshold){
-                lineHistory.push(frequencyInHz);
-                lastValidFrequency = frequencyInHz;
-            }
-            if (lineHistory.length > canvas.width){
-                lineHistory.shift();
-            }
+        micFrequency = maxIndexByteFrequency * (sampleRate / 2) / bufferLength;
 
-            const pointerColor =  'rgb(255, 0, 255)'
-            drawCanvas(null, frequencyInHz);
-                
-
-    }  
-    draw();
-}
-}) 
-.catch(function(err){
-    console.error("Falha ao Acessar o Microfone")
-})
+        requestAnimationFrame(analyzeMicrophone);
+    }
+    analyzeMicrophone();
+    startDrawingLoop();
+}).catch(err => {
+    console.error("Falha ao acessar o microfone", err);
+});
